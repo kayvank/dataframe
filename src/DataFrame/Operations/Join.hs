@@ -137,7 +137,14 @@ innerJoin cs right left =
                     then df
                     else
                         ( if name `elem` leftColumns
-                            then insertIfPresent ("Right_" <> name) (D.getColumn name expandedRight) df
+                            then
+                                insertIfPresent
+                                    name
+                                    ( D.mergeColumns
+                                        <$> D.getColumn name expandedLeft
+                                        <*> D.getColumn name expandedRight
+                                    )
+                                    df
                             else insertIfPresent name (D.getColumn name expandedRight) df
                         )
             )
@@ -215,7 +222,14 @@ leftJoin cs right left =
                     then df
                     else
                         ( if name `elem` leftColumns
-                            then insertIfPresent ("Right_" <> name) (D.getColumn name expandedRight) df
+                            then
+                                insertIfPresent
+                                    name
+                                    ( D.mergeColumns
+                                        <$> D.getColumn name expandedLeft
+                                        <*> D.getColumn name expandedRight
+                                    )
+                                    df
                             else insertIfPresent name (D.getColumn name expandedRight) df
                         )
             )
@@ -322,7 +336,14 @@ fullOuterJoin cs right left =
                         _ -> error "Join should have optional keys."
                     else
                         ( if name `elem` leftColumns
-                            then insertIfPresent ("Right_" <> name) (D.getColumn name expandedRight) df
+                            then
+                                insertIfPresent
+                                    name
+                                    ( D.mergeColumns
+                                        <$> D.getColumn name expandedLeft
+                                        <*> D.getColumn name expandedRight
+                                    )
+                                    df
                             else insertIfPresent name (D.getColumn name expandedRight) df
                         )
             ) -- ???

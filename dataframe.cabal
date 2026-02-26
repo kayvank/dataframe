@@ -110,6 +110,7 @@ library
                       scientific >=0.3.1 && <0.4,
                       template-haskell >= 2.0 && < 3,
                       text >= 2.0 && < 3,
+                      these >= 1.1 && < 2,
                       time >= 1.12 && < 2,
                       unordered-containers >= 0.1 && < 1,
                       vector ^>= 0.13,
@@ -212,6 +213,7 @@ test-suite tests
                     random-shuffle >= 0.0.4 && < 1,
                     random >= 1 && < 2,
                     text >= 2.0 && < 3,
+                    these >= 1.1 && < 2,
                     time >= 1.12 && < 2,
                     vector ^>= 0.13,
                     containers >= 0.6.7 && < 0.9

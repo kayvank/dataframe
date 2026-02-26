@@ -30,6 +30,7 @@ import Control.Exception (throw)
 import Control.Monad.ST (runST)
 import Data.Kind (Type)
 import Data.Maybe
+import Data.These
 import Data.Type.Equality (TestEquality (..))
 import DataFrame.Errors
 import DataFrame.Internal.Parsing
@@ -357,12 +358,8 @@ atIndicesStable indexes (OptionalColumn column) = OptionalColumn $ VG.unsafeBack
 {-# INLINE atIndicesStable #-}
 
 atIndicesWithNulls :: VB.Vector (Maybe Int) -> Column -> Column
-atIndicesWithNulls indices column
-    | VB.all isJust indices =
-        atIndicesStable
-            (VU.fromList (catMaybes (VB.toList indices)))
-            column
-    | otherwise = case column of
+atIndicesWithNulls indices column =
+    case column of
         BoxedColumn col ->
             OptionalColumn $ VB.map (fmap (col VB.!)) indices
         UnboxedColumn col ->
@@ -620,6 +617,87 @@ zipColumns (OptionalColumn optcolumn) (BoxedColumn column) = BoxedColumn (VG.zip
 zipColumns (OptionalColumn optcolumn) (UnboxedColumn column) = BoxedColumn (VG.zip optcolumn (VB.convert column))
 zipColumns (OptionalColumn optcolumn) (OptionalColumn optother) = BoxedColumn (VG.zip optcolumn optother)
 {-# INLINE zipColumns #-}
+
+-- | Merge two columns using `These`.
+mergeColumns :: Column -> Column -> Column
+mergeColumns (BoxedColumn column) (BoxedColumn other) = BoxedColumn (VG.zipWith These column other)
+mergeColumns (BoxedColumn column) (UnboxedColumn other) =
+    BoxedColumn
+        ( VB.generate
+            (min (VG.length column) (VG.length other))
+            (\i -> These (column VG.! i) (other VG.! i))
+        )
+mergeColumns (BoxedColumn column) (OptionalColumn other) =
+    BoxedColumn
+        ( VB.generate
+            (min (VG.length column) (VG.length other))
+            ( \i ->
+                if isNothing (other VG.! i)
+                    then This (column VG.! i)
+                    else These (column VG.! i) (fromJust $ other VG.! i)
+            )
+        )
+mergeColumns (UnboxedColumn column) (BoxedColumn other) =
+    BoxedColumn
+        ( VB.generate
+            (min (VG.length column) (VG.length other))
+            (\i -> These (column VG.! i) (other VG.! i))
+        )
+mergeColumns (UnboxedColumn column) (UnboxedColumn other) =
+    BoxedColumn
+        ( VB.generate
+            (min (VG.length column) (VG.length other))
+            (\i -> These (column VG.! i) (other VG.! i))
+        )
+mergeColumns (UnboxedColumn column) (OptionalColumn other) =
+    BoxedColumn
+        ( VB.generate
+            (min (VG.length column) (VG.length other))
+            ( \i ->
+                if isNothing (other VG.! i)
+                    then This (column VG.! i)
+                    else These (column VG.! i) (fromJust $ other VG.! i)
+            )
+        )
+mergeColumns (OptionalColumn column) (BoxedColumn other) =
+    BoxedColumn
+        ( VB.generate
+            (min (VG.length column) (VG.length other))
+            ( \i ->
+                if isNothing (column VG.! i)
+                    then That (other VG.! i)
+                    else These (fromJust $ column VG.! i) (other VG.! i)
+            )
+        )
+mergeColumns (OptionalColumn column) (UnboxedColumn other) =
+    BoxedColumn
+        ( VB.generate
+            (min (VG.length column) (VG.length other))
+            ( \i ->
+                if isNothing (column VG.! i)
+                    then That (other VG.! i)
+                    else These (fromJust $ column VG.! i) (other VG.! i)
+            )
+        )
+mergeColumns (OptionalColumn column) (OptionalColumn other) =
+    OptionalColumn
+        ( VB.generate
+            (min (VG.length column) (VG.length other))
+            ( \i ->
+                if isNothing (column VG.! i) && isNothing (other VG.! i)
+                    then Nothing
+                    else
+                        ( if isNothing (column VG.! i)
+                            then Just (That (fromJust $ other VG.! i))
+                            else
+                                ( if isNothing (other VG.! i)
+                                    then Just (This (fromJust $ column VG.! i))
+                                    else Just (These (fromJust $ column VG.! i) (fromJust $ other VG.! i))
+                                )
+                        )
+            )
+        )
+{-# INLINE mergeColumns #-}
 
 -- | An internal, column version of zipWith.
 zipWithColumns ::

@@ -4,6 +4,7 @@
 module Operations.Join where
 
 import Data.Text (Text)
+import Data.These
 import qualified DataFrame as D
 import qualified DataFrame.Functions as F
 import DataFrame.Operations.Join
@@ -58,7 +59,7 @@ testRightJoin =
             "Test right join with single key"
             ( D.fromNamedColumns
                 [ ("key", D.fromList ["K0" :: Text, "K1", "K2"])
-                , ("A", D.fromList ["A0" :: Text, "A1", "A2"])
+                , ("A", D.fromList [Just "A0" :: Maybe Text, Just "A1", Just "A2"])
                 , ("B", D.fromList ["B0" :: Text, "B1", "B2"])
                 ]
             )
@@ -112,10 +113,104 @@ testFullOuterJoin =
             (D.sortBy [D.Asc (F.col @Text "Name")] (fullOuterJoin ["Name"] studentDf staffDf))
         )
 
+dfL :: D.DataFrame
+dfL =
+    D.fromNamedColumns
+        [ ("key", D.fromList ["K0" :: Text, "K1", "K2"])
+        , ("X", D.fromList ["LX0" :: Text, "LX1", "LX2"])
+        , ("Lonly", D.fromList ["L0" :: Text, "L1", "L2"])
+        ]
+
+dfR :: D.DataFrame
+dfR =
+    D.fromNamedColumns
+        [ ("key", D.fromList ["K0" :: Text, "K1", "K3"])
+        , ("X", D.fromList ["RX0" :: Text, "RX1", "RX3"])
+        , ("Ronly", D.fromList [10 :: Int, 11, 13])
+        ]
+
+testInnerJoinWithCollisions :: Test
+testInnerJoinWithCollisions =
+    TestCase
+        ( assertEqual
+            "Test inner join with single key"
+            ( D.fromNamedColumns
+                [ ("key", D.fromList ["K0" :: Text, "K1"])
+                , ("X", D.fromList [These "LX0" "RX0" :: These Text Text, These "LX1" "RX1"])
+                , ("Lonly", D.fromList ["L0" :: Text, "L1"])
+                , ("Ronly", D.fromList [10 :: Int, 11])
+                ]
+            )
+            (D.sortBy [D.Asc (F.col @Text "key")] (innerJoin ["key"] dfR dfL))
+        )
+
+testLeftJoinWithCollisions :: Test
+testLeftJoinWithCollisions =
+    TestCase
+        ( assertEqual
+            "Test left join with single key"
+            ( D.fromNamedColumns
+                [ ("key", D.fromList ["K0" :: Text, "K1", "K2"])
+                ,
+                    ( "X"
+                    , D.fromList [These "LX0" "RX0" :: These Text Text, These "LX1" "RX1", This "LX2"]
+                    )
+                , ("Lonly", D.fromList ["L0" :: Text, "L1", "L2"])
+                , ("Ronly", D.fromList [Just 10 :: Maybe Int, Just 11, Nothing])
+                ]
+            )
+            (D.sortBy [D.Asc (F.col @Text "key")] (leftJoin ["key"] dfR dfL))
+        )
+
+testRightJoinWithCollisions :: Test
+testRightJoinWithCollisions =
+    TestCase
+        ( assertEqual
+            "Test right join with single key"
+            ( D.fromNamedColumns
+                [ ("key", D.fromList ["K0" :: Text, "K1", "K3"])
+                ,
+                    ( "X"
+                    , D.fromList [These "RX0" "LX0" :: These Text Text, These "RX1" "LX1", This "RX3"]
+                    )
+                , ("Ronly", D.fromList [10 :: Int, 11, 13])
+                , ("Lonly", D.fromList [Just "L0" :: Maybe Text, Just "L1", Nothing])
+                ]
+            )
+            (D.sortBy [D.Asc (F.col @Text "key")] (rightJoin ["key"] dfR dfL))
+        )
+
+testOuterJoinWithCollisions :: Test
+testOuterJoinWithCollisions =
+    TestCase
+        ( assertEqual
+            "Test right join with single key"
+            ( D.fromNamedColumns
+                [ ("key", D.fromList ["K0" :: Text, "K1", "K2", "K3"])
+                ,
+                    ( "X"
+                    , D.fromList
+                        [ Just (These "LX0" "RX0") :: Maybe (These Text Text)
+                        , Just (These "LX1" "RX1")
+                        , Just (This "LX2")
+                        , Just (That "RX3")
+                        ]
+                    )
+                , ("Lonly", D.fromList [Just "L0" :: Maybe Text, Just "L1", Just "L2", Nothing])
+                , ("Ronly", D.fromList [Just 10 :: Maybe Int, Just 11, Nothing, Just 13])
+                ]
+            )
+            (D.sortBy [D.Asc (F.col @Text "key")] (fullOuterJoin ["key"] dfR dfL))
+        )
+
 tests :: [Test]
 tests =
     [ TestLabel "innerJoin" testInnerJoin
     , TestLabel "leftJoin" testLeftJoin
     , TestLabel "rightJoin" testRightJoin
     , TestLabel "fullOuterJoin" testFullOuterJoin
+    , TestLabel "innerJoinWithCollisions" testInnerJoinWithCollisions
+    , TestLabel "leftJoinWithCollisions" testLeftJoinWithCollisions
+    , TestLabel "rightJoinWithCollisions" testRightJoinWithCollisions
+    , TestLabel "outerJoinWithCollisions" testOuterJoinWithCollisions
     ]
