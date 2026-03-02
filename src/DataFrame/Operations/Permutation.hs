@@ -13,6 +13,7 @@ import qualified Data.Vector.Unboxed.Mutable as VUM
 
 import Control.Exception (throw)
 import Control.Monad.ST (runST)
+import Data.Vector.Internal.Check (HasCallStack)
 import DataFrame.Errors (DataFrameException (..))
 import DataFrame.Internal.Column (Columnable, atIndicesStable)
 import DataFrame.Internal.DataFrame (DataFrame (..))
@@ -76,20 +77,23 @@ shuffle pureGen df =
      in
         df{columns = V.map (atIndicesStable indexes) (columns df)}
 
-shuffledIndices :: (RandomGen g) => g -> Int -> VU.Vector Int
+shuffledIndices :: (HasCallStack, RandomGen g) => g -> Int -> VU.Vector Int
 shuffledIndices pureGen k
-    | k <= 0 = VU.empty
+    | k < 0 = error $ "Vector index may not be a neative number: " <> show k
+    | k == 0 = VU.empty
     | otherwise = shuffleVec pureGen
   where
     shuffleVec :: (RandomGen g) => g -> VU.Vector Int
     shuffleVec g = runST $ do
         vm <- VUM.generate k id
-        let (n, nGen) = randomR (1, (k - 1)) g
+        let (n, nGen) = randomR (1, k - 1) g
         go vm n nGen
         VU.unsafeFreeze vm
 
     go v (-1) _ = pure ()
     go v 0 _ = pure ()
     go v maxInd gen =
-        let (n, nextGen) = randomR (1, maxInd) gen
-         in VUM.swap v 0 n *> go (VUM.tail v) (maxInd - 1) nextGen
+        let
+            (n, nextGen) = randomR (1, maxInd) gen
+         in
+            VUM.swap v 0 n *> go (VUM.tail v) (maxInd - 1) nextGen
